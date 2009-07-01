@@ -66,7 +66,7 @@ class RScript
     #Basic Rails App
     make_rails_app
     set_up_git_repo
-    install_gems
+    install_gems(["haml", "json", "fastercsv"])
     install_haml
   end
 
@@ -118,13 +118,12 @@ class RScript
   end
 
 
-  def install_gems
-    @update_gems = false
-    @gems.each do |gem|
-      unless @update_gems || (`gem list`.include? gem)
-        system "sudo gem install #{gem}"
-      end
-    end
+  def install_gems gems
+    gem_string = gems.map{|g| "  config.gem '#{g}'"}.join("\n")
+    in_project! "config"
+    target = "  # Specify gems that this application depends on and have them installed with rake gems:install\n"
+    insert_line_after_in "environment.rb", target, "#{gem_string}\n"
+    in_project! "rake gems:install"
   end
 
   def install_haml
