@@ -74,7 +74,8 @@ class RScript
     #Customisation
     setup_welcome_controller
     setup_layout
-    install_jrails
+#    install_jrails
+    install_authlogic
   end
 
   def make_rails_app
@@ -144,6 +145,12 @@ class RScript
 
     in_project! "app/views/layouts"
     insert_line_after_in "main.haml", "  %head\n", "    = stylesheet_link_tag 'smoothness/jquery-ui-1.7.2.custom.css', :rel => \"Stylesheet\"\n"
+  end
+
+  def install_authlogic
+    install_gems(["authlogic"])
+
+
   end
 
   def replace_with_server
