@@ -54,7 +54,7 @@ class RScript
 
 
   def initialize
-    @project_name = "moose_manager"
+    @project_name = "test"
     @projects_dir = "/home/katateochi/coding/rails"  # Dir.getwd
     @lib_dir = "/home/katateochi/coding/rails/rails_maker/files"
     @project_dir = @projects_dir << "/#{@project_name}"
