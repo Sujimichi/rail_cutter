@@ -1,0 +1,24 @@
+#<%= singular_name %>_show
+<% for attribute in attributes -%>
+  .attribute
+    .name <%= attribute.column.human_name %>:
+    .value=h @<%= singular_name %>.<%= attribute.name %> 
+<% end -%>
+
+#update_<%= singular_name %>{:style => 'display:none;'}
+  = render :partial => 'form', :locals => {:<%= singular_name %> => @<%= singular_name %> }
+
+= link_to_function 'Edit', :href => edit_<%= singular_name %>_path(@<%= singular_name %>), :id => "edit_<%= singular_name %>_link" do |page|
+  - page[:<%= singular_name %>_show].visual_effect :blind_up, :duration => 0.5
+  - page[:update_<%= singular_name %>].visual_effect :blind_down, :duration => 0.5
+  - page[:edit_<%= singular_name %>_link].hide
+  - page[:cancel_edit_<%= singular_name %>_link].visual_effect :appear
+
+= link_to_function 'Cancel', :href => edit_<%= singular_name %>_path(@<%= singular_name %>), :id => 'cancel_edit_<%= singular_name %>_link', :style => "display:none;" do |page|
+  - page[:<%= singular_name %>_show].visual_effect :blind_down, :duration => 0.5
+  - page[:update_<%= singular_name %>].visual_effect :blind_up, :duration => 0.5
+  - page[:cancel_edit_<%= singular_name %>_link].hide
+  - page[:edit_<%= singular_name %>_link].visual_effect :appear
+
+|
+= link_to 'Back', <%= table_name %>_path

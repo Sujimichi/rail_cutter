@@ -1,0 +1,6 @@
+%h1 Editing <%= singular_name %>
+
+= render :partial => 'form', :locals => {:<%= singular_name %> => @<%= singular_name %> }
+  
+= link_to 'Back', <%= path_for(table_name, singular_name, "index") %>
+
