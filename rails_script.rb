@@ -7,9 +7,16 @@ module FileActions
     FileUtils.chdir dir
   end
 
-  def modify_line_in file, target_line, new_line
+  def replace_line_in file, target_line, new_line
     f = File.open(file, 'r')
     new = f.map{|l| l.eql?(target_line) ? new_line : l}
+    f.close
+    write_to file, new
+  end
+
+  def alter_line_in file, target, change
+    f = File.open(file, 'r')
+    new = f.map{|l| l.include?(target) ? l.sub(target, change) : l}
     f.close
     write_to file, new
   end
@@ -47,7 +54,7 @@ class RScript
 
 
   def initialize
-    @project_name = "test"
+    @project_name = "moose_manager"
     @projects_dir = "/home/katateochi/coding/rails"  # Dir.getwd
     @lib_dir = "/home/katateochi/coding/rails/rails_maker/files"
     @project_dir = @projects_dir << "/#{@project_name}"
@@ -74,25 +81,40 @@ class RScript
     #Customisation
     setup_welcome_controller
     setup_layout
-#    install_jrails
+    #    install_jrails
+    install_scaffolds
     install_authlogic
   end
 
   def make_rails_app
-    system "rails #{@project_name}"
+    message "Creating Basic Rails App"
+    system "rails #{@project_name} -q"
     in_project!
     FileUtils.remove_dir "#{@project_dir}/test"
   end
 
   def set_up_git_repo
+    message "Initializing Git Repo"
     in_project!
     system "git init"
     git_add_and_commit "Initial Commit"
   end
+  
+  def git_add_and_commit message
+    system "git add ./"
+    system "git commit -m '#{message}'"
+  end
+
+  def message text
+    puts Array.new(text.length+20){"#"}.to_s
+    puts "#{Array.new(10){" "}.to_s}#{text}#{Array.new(10){" "}.to_s}"
+    puts Array.new(text.length+20){"#"}.to_s
+  end
 
   def setup_welcome_controller
+    message "Adding Welcome Controller and Views"
     in_project! "config"
-    modify_line_in "routes.rb", "  # map.root :controller => \"welcome\"\n", "  map.root :controller => \"welcome\"\n"
+    replace_line_in "routes.rb", "  # map.root :controller => \"welcome\"\n", "  map.root :controller => \"welcome\"\n"
     in_project! "app/controllers"
     write_to "welcome_controller.rb", @files.welcome_controller
     in_project! "app/views/welcome"
@@ -105,55 +127,95 @@ class RScript
   end
 
   def setup_layout
+    message "Adding basic layout (main.haml) in 'app/views/layouts'"
     in_project! "app/controllers"
     insert_line_after_in "application_controller.rb", :line6, "  layout 'main'\n"
     in_project! "app/views/layouts"
     write_to "main.haml", @files.main_haml
+    git_add_and_commit "Added basic layouts in views/layouts"
   end
-
-
-
-  def git_add_and_commit message
-    system "git add ./"
-    system "git commit -m '#{message}'"
-  end
-
 
   def install_gems gems
+    message "Adding gem dependencys and installing: #{gems.map{|g| g}}"
     gem_string = gems.map{|g| "  config.gem '#{g}'"}.join("\n")
     in_project! "config"
     target = "  # Specify gems that this application depends on and have them installed with rake gems:install\n"
     insert_line_after_in "environment.rb", target, "#{gem_string}\n"
-    in_project! "rake gems:install"
+    in_project! 
+    git_add_and_commit "Added gems to environment.rb: #{gems.map{|g| g}}"
+    system "rake gems:install"
   end
 
   def install_haml
+    message "Installing HAML and SASS"
     in_project!
     system "haml --rails ./"
     in_project! "app/stylesheets"
     write_to "layout.sass", @files.layout_sass
     write_to "utils.sass", @files.utils_sass
     in_project! "config/initializers"
-    write_to "sass.rb", @files.sass_rb #why do I need to do this.  should this not be setup with the install of haml?  this step is not memtioned in haml docs but without it css is not made from sass.
+    write_to "sass.rb", @files.sass_rb #why do I need to do this?  should this not be setup with the install of haml?  this step is not memtioned in haml docs but without it css is not made from sass.
+    git_add_and_commit "Added Haml and SASS"
   end
 
   def install_jrails
+    message "Installing jrails with Jquery-ui"
     in_project! 
-    system "ruby script/plugin install http://ennerchi.googlecode.com/svn/trunk/plugins/jrails"
+    system "ruby script/plugin install http://ennerchi.googlecode.com/svn/trunk/plugins/jrails -q"
     system "cp #{@lib_dir}/jquery/css/smoothness ./public/stylesheets/ -r"
     system "cp #{@lib_dir}/jquery/js/jquery-ui*.js ./public/javascripts/jquery-ui.js"
 
     in_project! "app/views/layouts"
     insert_line_after_in "main.haml", "  %head\n", "    = stylesheet_link_tag 'smoothness/jquery-ui-1.7.2.custom.css', :rel => \"Stylesheet\"\n"
+    git_add_and_commit "Added jrails with Jquery-ui"
   end
 
   def install_authlogic
+    message "Installing Authlogic with User model and creating basic user create and login views"
     install_gems(["authlogic"])
 
+    in_project!
+    system "ruby script/generate session user_session -q"
+    system "ruby script/generate haml_scaffold user login:string email:string crypted_password:string password_salt:string persistence_token:string -q"
+
+    in_project! "app/models"
+    insert_line_after_in "user.rb", :line0, "  acts_as_authentic\n"
+
+    in_project! "app/controllers"
+    write_to "users_controller.rb", @files.users_controller
+    write_to "user_sessions_controller.rb", @files.user_sessions_controller
+    insert_line_after_in "application_controller.rb", "  # filter_parameter_logging :password\n", @files.authlogic_patch_for_application_controller
+    insert_line_after_in "welcome_controller.rb", :line0,  "  skip_before_filter :require_login\n"
+
+    in_project! "app/views/users"
+    alter_line_in "_form.haml", "f.label :crypted_password", "f.label :password"
+    alter_line_in "_form.haml", "f.text_field :crypted_password", "f.password_field :password"
+    alter_line_in "_form.haml", "f.label :password_salt", "f.label :password_confirmation"
+    alter_line_in "_form.haml", "f.text_field :password_salt", "f.password_field :password_confirmation"
+    in_project! "app/views/layouts"
+    insert_line_after_in "main.haml", "        .links\n", @files.authlogic_patch_for_layouts_main
+    in_project! "app/views/welcome"
+    write_to "index.haml", @files.authlogic_welcome_index
+
+    in_project! "config"
+    insert_line_after_in "routes.rb", :line0, @files.authlogic_patch_for_routes
+
+    in_project!
+    system "rake db:migrate"
+    git_add_and_commit "Added Authlogic with User model, setup controllers and views for basic user create and login"
 
   end
 
+  def install_scaffolds
+    message "Installing scaffolds"
+    in_project!
+    system "cp #{@lib_dir}/haml_scaffold ./vendor/plugins/ -r"
+    #system "ruby script/plugin install git://github.com/wolas/sexy_scaffold.git"
+    git_add_and_commit "Added Scaffolds"
+  end
+
   def replace_with_server
+    message "Rails App: #{@project_name} setup complete, launching server"
     in_project!
     Kernel.exec("ruby script/server")
   end
@@ -175,10 +237,181 @@ class FileData
     puts data.map {|j|  "#{j.inspect},"}
   end 
 
+
+  def authlogic_welcome_index
+    [
+      "-if current_user\n",
+      "  .centered\n",
+      "    .widget\n",
+      "      %p= \"Logged in as \#{current_user.login}\"\n",
+      "\n",
+      "- unless current_user\n",
+      "  .centered\n",
+      "    .widget{:id => 'login_widget'}\n",
+      "      - form_for UserSession.new do |f|\n",
+      "        - f.error_messages\n",
+      "        %br\n",
+      "        .css_table\n",
+      "          .label= f.label :login\n",
+      "          .value= f.text_field :login\n",
+      "        .css_table\n",
+      "          .label= f.label :password\n",
+      "          .value= f.password_field :password\n",
+      "        .clear\n",
+      "        .login_bttn=f.submit(\"Login\")\n",
+      "        %br"
+   ]
+  end
+
+  def authlogic_patch_for_layouts_main
+    [
+      "          - unless current_user\n",
+      "            = link_to \"register\", new_user_path\n",
+      "          - if current_user\n",
+      "            .right.small\n",
+      "              = link_to \"logout (\#{current_user.login})\", logout_path, :onmousedown => \"$('#content').fadeOut()\"\n",
+      "              = link_to \"edit\", edit_user_path(:current)\n",
+      "            .clear\n"
+    ]  
+  end
+
+  def authlogic_patch_for_routes
+    [
+      "  map.resources :user_sessions\n",
+      "  map.login 'login', :controller => 'user_sessions', :action => 'new'\n",
+      "  map.logout 'logout', :controller => 'user_sessions', :action => 'destroy'\n"
+    ]
+  end
+
+  def authlogic_patch_for_application_controller
+    [
+      "  require 'authlogic'\n",
+      "  before_filter :require_login\n",
+      "  filter_parameter_logging :password\n",
+      "  helper_method :current_user\n",
+      "  private\n",
+      "\n",      
+      "  def current_user_session\n",
+      "    return @current_user_session if defined?(@current_user_session)\n",
+      "    @current_user_session = UserSession.find\n",
+      "  end\n",
+      "\n",      
+      "  def current_user\n",
+      "    return @current_user if defined?(@current_user)\n",
+      "    @current_user = current_user_session && current_user_session.record\n",
+      "  end\n",
+      "\n",      
+      "  def logged_in?\n",
+      "    return true if current_user\n",
+      "    false\n",
+      "  end\n",
+      "\n",
+      "  def authentication_failed!\n",
+      "    store_location\n",
+      "    flash[:notice] = \"You must be logged in\"\n",
+      "    redirect_to root_url\n",
+      "  end\n",
+      "\n",
+      "  def not_allowed! redirect = root_url\n",
+      "    flash[:error] = \"You cannot access this\"\n",
+      "    redirect_to redirect and return\n",
+      "  end\n",
+      "\n",
+      "  def not_found! redirect = root_url\n",
+      "    flash[:notice] = \"The requested item can not be found\"\n",
+      "    redirect_to redirect and return\n",
+      "  end\n",
+      "\n",
+      "  def require_login\n",
+      "    return authentication_failed! unless current_user\n",
+      "  end\n",
+      "\n",
+      "  def store_location\n",
+      "    session[:return_to] = request.request_uri\n",
+      "  end\n",
+      "\n",
+      "  def redirect_back_or_default(default = root_url)\n",
+      "    redirect_to(session[:return_to] || default)\n",
+      "    session[:return_to] = nil\n",
+      "  end\n"
+    ]
+
+  end
+
+  def users_controller
+    [
+      "class UsersController < ApplicationController\n",
+      "  skip_before_filter :require_login, :only => [:new, :create]\n",
+      "\n",
+      "  def new\n",
+      "    @user = User.new\n",
+      "  end\n",
+      "\n",
+      "  def create\n",
+      "    @user = User.new(params[:user])\n",
+      "    if @user.save\n",
+      "      flash[:notice] = \"Registration successful.\"\n",
+      "      redirect_to root_url\n",
+      "    else\n",
+      "      render :action => 'new'\n",
+      "    end\n",
+      "  end\n",
+      "\n",
+      "  def edit\n",
+      "    @user = current_user\n",
+      "  end\n",
+      "\n",
+      "  def update\n",
+      "    @user = current_user\n",
+      "    if @user.update_attributes(params[:user])\n",
+      "      flash[:notice] = \"Successfully updated profile.\"\n",
+      "      redirect_to root_url\n",
+      "    else\n",
+      "      render :action => 'edit'\n",
+      "    end\n",
+      "  end  \n",
+      "\n",
+      "end"
+    ]
+
+  end
+
+  def user_sessions_controller
+    [
+      "class UserSessionsController < ApplicationController\n",
+      "  skip_before_filter :require_login, :just => [:new]\n",
+      "\n",
+      "  def new\n",
+      "    @user_session = UserSession.new\n",
+      "  end\n",
+      "\n",
+      "  def create\n",
+      "    @user_session = UserSession.new(params[:user_session])\n",
+      "    if @user_session.save\n",
+      "      flash[:notice] = \"Oh, U again is it?\"\n",
+      "      redirect_to root_url\n",
+      "    else\n",
+      "      flash[:error] = \"hmmm, I dont like you\"\n",
+      "      redirect_to root_url\n",
+      "    end\n",
+      "  end\n",
+      "\n",
+      "  def destroy\n",
+      "    @user_session = UserSession.find\n",
+      "    @user_session.destroy\n",
+      "    flash[:notice] = \"Successfully logged out.\"\n",
+      "    redirect_to root_url\n",
+      "  end\n",
+      "\n",
+      "end"
+    ]
+
+  end
+
+
   def welcome_controller
     [
       "class WelcomeController < ApplicationController\n",
-      "  skip_before_filter :require_login\n",
       "  def index\n",
       "  end\n",
       "end\n"
@@ -200,43 +433,32 @@ class FileData
       "  %head\n",
       "    = stylesheet_link_tag 'utils.css', :media => 'screen, projection'\n",
       "    = stylesheet_link_tag 'layout.css', :media => 'screen, projection'\n",
-#      "    = stylesheet_link_tag 'custom-theme/jquery-ui-1.7.1.custom.css', :rel => \"Stylesheet\"\n",
       "    = javascript_include_tag \"application\", :defaults\n",
       "    <!--[if IE]><script language=\"javascript\" type=\"text/javascript\" src=\"excanvas.pack.js\"></script><![endif]-->\n",
       "\n",
       "    %title\n",
-      "      #{@project_name}\n",
+      "      #{@project_name.gsub("_", " ")}\n",
       "\n",
       "  %body\n",
       "    #body\n",
       "      #header\n",
       "        .title{:onmouseup => \"window.open('\#{root_url}', '_parent')\"}\n",
-      "          #{@project_name}\n",
+      "          #{@project_name.gsub("_", " ")}\n",
       "        .tag new rails site\n",
       "\n",
       "        .links\n",
       "\n",
       "      #content\n",
-      "        #flash.hidden\n",
-      "          -if flash[:error] || flash[:notice]\n",
-      "            :javascript\n",
-      "              $(function (){$('#flash').fadeIn('slow')});\n",
-      "          - if flash[:error]\n",
-      "            .flash_error= flash[:error]\n",
-      "          - if flash[:notice]\n",
-      "            .flash_notice= flash[:notice]\n",
-      "          - if (flash[:error] || flash[:notice]) && !flash[:fade]\n",
-      "            :javascript\n",
-      "              $(function (){\n",
-      "                var flash_fade = function (){$('#flash').fadeOut('slow')};\n",
-      "                setTimeout ( flash_fade, 2000 );\n",
-      "              });\n",
+      "        - if flash[:error]\n",
+      "          .flash_error= flash[:error]\n",
+      "        - if flash[:notice]\n",
+      "          .flash_notice= flash[:notice]\n",
       "\n",
       "        =yield\n",
       "\n",
       "      .clear\n",
       "      #footer\n",
-      "        %h6 #{@project_name}.on_rails[:alpha]\n",
+      "        %h6 #{@project_name.gsub("_", " ")}.on_rails[:alpha]\n",
       "\n",
       ":javascript\n",
       "  function toggeler(link_div, state_1_div, state_2_div, state_1_text, state_2_text){\n",
@@ -599,7 +821,5 @@ r = RScript.new
 r.make_all
 
 #TODO
-#authlogic, users and user_sessions
-#hanl and sass
 #remove unneeded specs.
 
