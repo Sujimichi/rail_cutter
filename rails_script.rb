@@ -28,13 +28,13 @@ module FileActions
     i = data.index(target_line) if target_line.is_a? String
     i = target_line.to_s.sub("line", "").to_i if target_line.is_a? Symbol
     s = data[0..(i)]
-    e = data[(i+1)..(data.size-1)] 
+    e = data[(i+1)..(data.size-1)]
     write_to file, ([s,m,e].flatten)
   end
 
 
   def write_to file, data
-    begin 
+    begin
       f = File.open(file, "w")
     rescue
       FileUtils.touch file
@@ -99,7 +99,7 @@ class RScript
     system "git init"
     git_add_and_commit "Initial Commit"
   end
-  
+
   def git_add_and_commit message
     system "git add ./"
     system "git commit -m '#{message}'"
@@ -141,7 +141,7 @@ class RScript
     in_project! "config"
     target = "  # Specify gems that this application depends on and have them installed with rake gems:install\n"
     insert_line_after_in "environment.rb", target, "#{gem_string}\n"
-    in_project! 
+    in_project!
     git_add_and_commit "Added gems to environment.rb: #{gems.map{|g| g}}"
     system "rake gems:install"
   end
@@ -160,8 +160,16 @@ class RScript
 
   def install_jrails
     message "Installing jrails with Jquery-ui"
-    in_project! 
+    in_project!
     system "ruby script/plugin install http://ennerchi.googlecode.com/svn/trunk/plugins/jrails -q"
+    =begin
+      require 'open-uri'
+      dump = open("zipfile.zip", "wb")
+      url = "http://jqueryui.com/download/jquery-ui-1.7.2.custom.zip"
+      dump.write(open(url).read)
+      dump.close
+    =end
+
     system "cp #{@lib_dir}/jquery/css/smoothness ./public/stylesheets/ -r"
     system "cp #{@lib_dir}/jquery/js/jquery-ui*.js ./public/javascripts/jquery-ui.js"
 
@@ -235,7 +243,7 @@ class FileData
     data = f.map
     f.close
     puts data.map {|j|  "#{j.inspect},"}
-  end 
+  end
 
 
   def authlogic_welcome_index
@@ -272,7 +280,7 @@ class FileData
       "              = link_to \"logout (\#{current_user.login})\", logout_path, :onmousedown => \"$('#content').fadeOut()\"\n",
       "              = link_to \"edit\", edit_user_path(:current)\n",
       "            .clear\n"
-    ]  
+    ]
   end
 
   def authlogic_patch_for_routes
@@ -290,17 +298,17 @@ class FileData
       "  filter_parameter_logging :password\n",
       "  helper_method :current_user\n",
       "  private\n",
-      "\n",      
+      "\n",
       "  def current_user_session\n",
       "    return @current_user_session if defined?(@current_user_session)\n",
       "    @current_user_session = UserSession.find\n",
       "  end\n",
-      "\n",      
+      "\n",
       "  def current_user\n",
       "    return @current_user if defined?(@current_user)\n",
       "    @current_user = current_user_session && current_user_session.record\n",
       "  end\n",
-      "\n",      
+      "\n",
       "  def logged_in?\n",
       "    return true if current_user\n",
       "    false\n",
@@ -422,7 +430,7 @@ class FileData
     [
       ".centered\n",
       "  .widget\n",
-      "    %p This is the welcome page" 
+      "    %p This is the welcome page"
     ]
   end
 
@@ -822,4 +830,3 @@ r.make_all
 
 #TODO
 #remove unneeded specs.
-
