@@ -162,13 +162,15 @@ class RScript
     message "Installing jrails with Jquery-ui"
     in_project!
     system "ruby script/plugin install http://ennerchi.googlecode.com/svn/trunk/plugins/jrails -q"
-    =begin
+
+    
+=begin
       require 'open-uri'
       dump = open("zipfile.zip", "wb")
       url = "http://jqueryui.com/download/jquery-ui-1.7.2.custom.zip"
       dump.write(open(url).read)
       dump.close
-    =end
+=end
 
     system "cp #{@lib_dir}/jquery/css/smoothness ./public/stylesheets/ -r"
     system "cp #{@lib_dir}/jquery/js/jquery-ui*.js ./public/javascripts/jquery-ui.js"
