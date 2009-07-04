@@ -48,6 +48,7 @@ end
 
 
 class RScript
+  require 'rubygems'
   require 'fileutils'
   include FileActions
   attr_accessor :project_name
@@ -58,7 +59,6 @@ class RScript
     @projects_dir = "/home/katateochi/coding/rails"  # Dir.getwd
     @lib_dir = "/home/katateochi/coding/rails/rails_maker/files"
     @project_dir = @projects_dir << "/#{@project_name}"
-    @gems = ["haml"]
     @files = FileData.new(@project_name)
   end
 
@@ -81,13 +81,13 @@ class RScript
     #Customisation
     setup_welcome_controller
     setup_layout
-    #    install_jrails
+    install_jrails
     install_scaffolds
     install_authlogic
   end
 
   def make_rails_app
-    message "Creating Basic Rails App"
+    message "Creating Rails App for project: '#{@project_name}'"
     system "rails #{@project_name} -q"
     in_project!
     FileUtils.remove_dir "#{@project_dir}/test"
@@ -101,14 +101,16 @@ class RScript
   end
 
   def git_add_and_commit message
-    system "git add ./"
-    system "git commit -m '#{message}'"
+    message "commiting", 2
+    system "git add -u"
+    system "git add ./" #both so that additions and deletions are tracked
+    system "git commit -m '#{message}' -q"
   end
 
-  def message text
-    puts Array.new(text.length+20){"#"}.to_s
-    puts "#{Array.new(10){" "}.to_s}#{text}#{Array.new(10){" "}.to_s}"
-    puts Array.new(text.length+20){"#"}.to_s
+  def message text, indent = 0
+    puts "\n#{Array.new(text.length+10){"#"}.to_s}" if indent.eql?(0)
+    indt = Array.new(indent){"."}.to_s
+    puts "#{indt}#{text}\n"
   end
 
   def setup_welcome_controller
@@ -136,7 +138,7 @@ class RScript
   end
 
   def install_gems gems
-    message "Adding gem dependencys and installing: #{gems.map{|g| g}}"
+    message "Adding gem dependencys and installing: #{gems.map{|g| g}.join(", ")}", 2
     gem_string = gems.map{|g| "  config.gem '#{g}'"}.join("\n")
     in_project! "config"
     target = "  # Specify gems that this application depends on and have them installed with rake gems:install\n"
@@ -158,22 +160,38 @@ class RScript
     git_add_and_commit "Added Haml and SASS"
   end
 
+  def download_and_unpack_jquery_ui url
+    require 'open-uri'
+    require 'fileutils'
+    require 'zip/zip'
+    require 'zip/zipfilesystem'
+
+    in_project! "temp"
+    message "Downloading Jquery", 2
+    File.open("jquery.zip", "wb"){|f| f.write( open(url).read ) }
+
+    message "Unpacking Jquery", 2
+    Zip::ZipFile.open("jquery.zip") do |zip_file|
+      zip_file.each do |f|
+        f_path=File.join("jquery", f.name)
+        FileUtils.mkdir_p(File.dirname(f_path))
+        zip_file.extract(f, f_path) unless File.exist?(f_path)
+      end
+    end
+  end
+
   def install_jrails
     message "Installing jrails with Jquery-ui"
+    download_and_unpack_jquery_ui "http://jqueryui.com/download/jquery-ui-1.7.2.custom.zip"
+
     in_project!
+    message "installing jrails" ,2
     system "ruby script/plugin install http://ennerchi.googlecode.com/svn/trunk/plugins/jrails -q"
 
-    
-=begin
-      require 'open-uri'
-      dump = open("zipfile.zip", "wb")
-      url = "http://jqueryui.com/download/jquery-ui-1.7.2.custom.zip"
-      dump.write(open(url).read)
-      dump.close
-=end
-
-    system "cp #{@lib_dir}/jquery/css/smoothness ./public/stylesheets/ -r"
-    system "cp #{@lib_dir}/jquery/js/jquery-ui*.js ./public/javascripts/jquery-ui.js"
+    message "adding css and javascripts", 2
+    system "cp ./temp/jquery/css/smoothness ./public/stylesheets/ -r"
+    system "cp ./temp/jquery/js/jquery-ui*.js ./public/javascripts/jquery-ui.js"
+    FileUtils.remove_dir "#{@project_dir}/temp"
 
     in_project! "app/views/layouts"
     insert_line_after_in "main.haml", "  %head\n", "    = stylesheet_link_tag 'smoothness/jquery-ui-1.7.2.custom.css', :rel => \"Stylesheet\"\n"
@@ -181,22 +199,27 @@ class RScript
   end
 
   def install_authlogic
-    message "Installing Authlogic with User model and creating basic user create and login views"
+    message "Installing Authlogic"
     install_gems(["authlogic"])
 
     in_project!
+    message "scaffolding user_sessions", 2
     system "ruby script/generate session user_session -q"
+    message "scaffolding users (login & password)", 2
     system "ruby script/generate haml_scaffold user login:string email:string crypted_password:string password_salt:string persistence_token:string -q"
 
+    message "modifying user model", 2
     in_project! "app/models"
     insert_line_after_in "user.rb", :line0, "  acts_as_authentic\n"
 
+    message "modifying controllers", 2
     in_project! "app/controllers"
     write_to "users_controller.rb", @files.users_controller
     write_to "user_sessions_controller.rb", @files.user_sessions_controller
     insert_line_after_in "application_controller.rb", "  # filter_parameter_logging :password\n", @files.authlogic_patch_for_application_controller
     insert_line_after_in "welcome_controller.rb", :line0,  "  skip_before_filter :require_login\n"
 
+    message "modifying views, users can register, login and edit", 2
     in_project! "app/views/users"
     alter_line_in "_form.haml", "f.label :crypted_password", "f.label :password"
     alter_line_in "_form.haml", "f.text_field :crypted_password", "f.password_field :password"
@@ -208,10 +231,11 @@ class RScript
     write_to "index.haml", @files.authlogic_welcome_index
 
     in_project! "config"
+    message "modifying routes", 2
     insert_line_after_in "routes.rb", :line0, @files.authlogic_patch_for_routes
 
     in_project!
-    system "rake db:migrate"
+    migrate!
     git_add_and_commit "Added Authlogic with User model, setup controllers and views for basic user create and login"
 
   end
@@ -222,6 +246,11 @@ class RScript
     system "cp #{@lib_dir}/haml_scaffold ./vendor/plugins/ -r"
     #system "ruby script/plugin install git://github.com/wolas/sexy_scaffold.git"
     git_add_and_commit "Added Scaffolds"
+  end
+
+  def migrate!
+    message "migrating", 2
+    system "rake db:migrate"
   end
 
   def replace_with_server
