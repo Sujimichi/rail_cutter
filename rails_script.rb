@@ -165,7 +165,7 @@ class RScript
     require 'fileutils'
     require 'zip/zip'
     require 'zip/zipfilesystem'
-
+    
     in_project! "temp"
     message "Downloading Jquery", 2
     File.open("jquery.zip", "wb"){|f| f.write( open(url).read ) }

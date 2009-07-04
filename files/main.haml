@@ -1,0 +1,64 @@
+!!!
+%html
+  %head
+    = stylesheet_link_tag 'utils.css', :media => 'screen, projection'
+    = stylesheet_link_tag 'layout.css', :media => 'screen, projection'
+    = stylesheet_link_tag 'custom-theme/jquery-ui-1.7.1.custom.css', :rel => "Stylesheet"
+
+    = javascript_include_tag "application", :defaults, "json", "jquery.flot"
+    <!--[if IE]><script language="javascript" type="text/javascript" src="excanvas.pack.js"></script><![endif]-->
+
+    %title
+      Ticket Conductor
+
+  %body
+    #body
+      #header
+        .title{:onmouseup => "window.open('#{root_url}', '_parent')"}
+          Ticket Conductor
+        .tag tickets please
+
+        .links
+          - unless current_user
+            = link_to "register", new_user_path
+          - if current_user
+            .right.small
+              = link_to "logout (#{current_user.username})", logout_path, :onmousedown => "$('#content').fadeOut()"
+              = link_to "edit", user_path(:current)
+            .clear
+
+      #content
+        #flash.hidden
+          -if flash[:error] || flash[:notice]
+            :javascript
+              $(function (){$('#flash').fadeIn('slow')});
+          - if flash[:error]
+            .flash_error= flash[:error]
+          - if flash[:notice]
+            .flash_notice= flash[:notice]
+          - if (flash[:error] || flash[:notice]) && !flash[:fade]
+            :javascript
+              $(function (){
+                var flash_fade = function (){$('#flash').fadeOut('slow')};
+                setTimeout ( flash_fade, 2000 );
+              });
+
+        =yield
+
+      .clear
+      #footer
+        %h6 TicketManager.on_rails[:alpha]
+
+:javascript
+  function toggeler(link_div, state_1_div, state_2_div, state_1_text, state_2_text){
+    var opt = $('#' + link_div).html();
+    if (opt == state_1_text){
+      $('#' + state_1_div).hide('slow');
+      $('#' + state_2_div).show('slow');
+      $('#' + link_div).html(state_2_text);
+    }else{
+      $('#' + state_2_div).hide('slow');
+      $('#' + state_1_div).show('slow');
+      $('#' + link_div).html(state_1_text);
+    };
+  };
