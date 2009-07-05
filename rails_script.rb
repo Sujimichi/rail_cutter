@@ -57,7 +57,6 @@ class RScript
   def initialize
     @project_name = "test"
     @projects_dir = "/home/katateochi/coding/rails"  # Dir.getwd
-    @lib_dir = "/home/katateochi/coding/rails/rails_maker/files"
     @project_dir = @projects_dir << "/#{@project_name}"
     @files = FileData.new(@project_name)
   end
@@ -84,6 +83,8 @@ class RScript
     install_jrails
     install_scaffolds
     install_authlogic
+    make_model "llama", {:name => :string, :spitting_distance => :float, :leathal => :boolean, :description => :text}
+  
   end
 
   def make_rails_app
@@ -160,6 +161,11 @@ class RScript
     git_add_and_commit "Added Haml and SASS"
   end
 
+  def make_model name, attributes
+    message "Making Models"
+    system "ruby script/generate sexy_scaffold #{name} #{attributes.map{|k,v| "#{k}:#{v}" }.join(" ")}"
+  end
+
   def download_and_unpack_jquery_ui url
     require 'open-uri'
     require 'fileutils'
@@ -201,13 +207,15 @@ class RScript
   def install_authlogic
     message "Installing Authlogic"
     install_gems(["authlogic"])
-
     in_project!
     message "scaffolding user_sessions", 2
     system "ruby script/generate session user_session -q"
     message "scaffolding users (login & password)", 2
-    system "ruby script/generate haml_scaffold user login:string email:string crypted_password:string password_salt:string persistence_token:string -q"
+    system "ruby script/generate sexy_scaffold user login:string email:string crypted_password:string password_salt:string -q"
 
+    in_project! "db/migrate"
+    insert_line_after_in Dir.entries(Dir.getwd).select{|ent| ent.include?("create_users")}.first, "      t.string :password_salt\n", "      t.string :persistence_token\n"
+    
     message "modifying user model", 2
     in_project! "app/models"
     insert_line_after_in "user.rb", :line0, "  acts_as_authentic\n"
@@ -225,6 +233,7 @@ class RScript
     alter_line_in "_form.haml", "f.text_field :crypted_password", "f.password_field :password"
     alter_line_in "_form.haml", "f.label :password_salt", "f.label :password_confirmation"
     alter_line_in "_form.haml", "f.text_field :password_salt", "f.password_field :password_confirmation"
+
     in_project! "app/views/layouts"
     insert_line_after_in "main.haml", "        .links\n", @files.authlogic_patch_for_layouts_main
     in_project! "app/views/welcome"
@@ -243,8 +252,8 @@ class RScript
   def install_scaffolds
     message "Installing scaffolds"
     in_project!
-    system "cp #{@lib_dir}/haml_scaffold ./vendor/plugins/ -r"
     #system "ruby script/plugin install git://github.com/wolas/sexy_scaffold.git"
+    system "ruby script/plugin install git://github.com/Sujimichi/sexy_scaffold.git"
     git_add_and_commit "Added Scaffolds"
   end
 
