@@ -1,66 +1,19 @@
-module FileActions
-
-  def in_project! sub_dir = nil
-    dir = @project_dir
-    dir = "#{@project_dir}/#{sub_dir}" if sub_dir
-    FileUtils.mkpath dir #makes the path exist if it does not already
-    FileUtils.chdir dir
-  end
-
-  def replace_line_in file, target_line, new_line
-    f = File.open(file, 'r')
-    new = f.map{|l| l.eql?(target_line) ? new_line : l}
-    f.close
-    write_to file, new
-  end
-
-  def alter_line_in file, target, change
-    f = File.open(file, 'r')
-    new = f.map{|l| l.include?(target) ? l.sub(target, change) : l}
-    f.close
-    write_to file, new
-  end
-
-  def insert_line_after_in file, target_line, m
-    f = File.open(file, 'r')
-    data = f.map
-    f.close
-    i = data.index(target_line) if target_line.is_a? String
-    i = target_line.to_s.sub("line", "").to_i if target_line.is_a? Symbol
-    s = data[0..(i)]
-    e = data[(i+1)..(data.size-1)]
-    write_to file, ([s,m,e].flatten)
-  end
-
-
-  def write_to file, data
-    begin
-      f = File.open(file, "w")
-    rescue
-      FileUtils.touch file
-      f = File.open(file, "w")
-    end
-    f.write(data)
-    f.close
-  end
-
-end
-
-
-class RScript
+class RailCutter
   require 'rubygems'
   require 'fileutils'
-  include FileActions
   attr_accessor :project_name
 
+  def self.new_project name = "test"
+    rc = RailCutter.new(name, Dir.getwd)
+    rc.make_all
+  end
 
-  def initialize
-    @project_name = "test"
-    @projects_dir = "/home/katateochi/coding/rails"  # Dir.getwd
+  def initialize name, path 
+    @project_name = name
+    @projects_dir = path 
     @project_dir = @projects_dir << "/#{@project_name}"
     @files = FileData.new(@project_name)
   end
-
 
   def make_all
     make_basic_rails_app
@@ -103,6 +56,7 @@ class RScript
 
   def git_add_and_commit message
     message "commiting", 2
+    in_project!
     system "git add -u"
     system "git add ./" #both so that additions and deletions are tracked
     system "git commit -m '#{message}' -q"
@@ -116,137 +70,102 @@ class RScript
 
   def setup_welcome_controller
     message "Adding Welcome Controller and Views"
-    in_project! "config"
-    replace_line_in "routes.rb", "  # map.root :controller => \"welcome\"\n", "  map.root :controller => \"welcome\"\n"
-    in_project! "app/controllers"
-    write_to "welcome_controller.rb", @files.welcome_controller
-    in_project! "app/views/welcome"
-    write_to "index.haml", @files.welcome_index
-    in_project! "public"
-    FileUtils.touch "index.html"
-    FileUtils.remove "index.html"
-    in_project!
+    in_project!("config") { alter_line_in "routes.rb", "# map.root :controller", "map.root :controller" } # uncomment line in routes
+    in_project!("app/controllers") { write_to "welcome_controller.rb", @files.welcome_controller }        # create welcome controller
+    in_project!("app/views/welcome") { write_to "index.haml", @files.welcome_index }                      # create welcome index
+    in_project! "public" do 
+      FileUtils.touch "index.html"  #touched incase its not there
+      FileUtils.remove "index.html" #deleted
+    end
     git_add_and_commit "added welcome controller, welcome view and changed routes, removed public/index.htm/"
   end
 
   def setup_layout
     message "Adding basic layout (main.haml) in 'app/views/layouts'"
-    in_project! "app/controllers"
-    insert_line_after_in "application_controller.rb", :line6, "  layout 'main'\n"
-    in_project! "app/views/layouts"
-    write_to "main.haml", @files.main_haml
+    in_project!("app/views/layouts") { write_to "main.haml", @files.main_haml }                                       #create layout file
+    in_project!("app/controllers") { insert_line_after_in "application_controller.rb", :line6, "  layout 'main'\n" }  #specify layout in application contoller
     git_add_and_commit "Added basic layouts in views/layouts"
   end
 
   def install_gems gems
     message "Adding gem dependencys and installing: #{gems.map{|g| g}.join(", ")}", 2
     gem_string = gems.map{|g| "  config.gem '#{g}'"}.join("\n")
-    in_project! "config"
-    target = "  # Specify gems that this application depends on and have them installed with rake gems:install\n"
-    insert_line_after_in "environment.rb", target, "#{gem_string}\n"
-    in_project!
+    target = "  # Specify gems that this application depends on and have them installed with rake gems:install\n" #line to follow in config.rb
+    in_project!("config") { insert_line_after_in "environment.rb", target, "#{gem_string}\n" }                    #add gem dependencies after above line
     git_add_and_commit "Added gems to environment.rb: #{gems.map{|g| g}}"
     system "rake gems:install"
   end
 
   def install_haml
     message "Installing HAML and SASS"
-    in_project!
-    system "haml --rails ./"
-    in_project! "app/stylesheets"
-    write_to "layout.sass", @files.layout_sass
-    write_to "utils.sass", @files.utils_sass
-    in_project! "config/initializers"
-    write_to "sass.rb", @files.sass_rb #why do I need to do this?  should this not be setup with the install of haml?  this step is not memtioned in haml docs but without it css is not made from sass.
-    git_add_and_commit "Added Haml and SASS"
-  end
-
-  def make_model name, attributes
-    message "Making Models"
-    system "ruby script/generate sexy_scaffold #{name} #{attributes.map{|k,v| "#{k}:#{v}" }.join(" ")}"
-  end
-
-  def download_and_unpack_jquery_ui url
-    require 'open-uri'
-    require 'fileutils'
-    require 'zip/zip'
-    require 'zip/zipfilesystem'
-    
-    in_project! "temp"
-    message "Downloading Jquery", 2
-    File.open("jquery.zip", "wb"){|f| f.write( open(url).read ) }
-
-    message "Unpacking Jquery", 2
-    Zip::ZipFile.open("jquery.zip") do |zip_file|
-      zip_file.each do |f|
-        f_path=File.join("jquery", f.name)
-        FileUtils.mkdir_p(File.dirname(f_path))
-        zip_file.extract(f, f_path) unless File.exist?(f_path)
-      end
+    in_project! { system "haml --rails ./" }
+    in_project! "app/stylesheets" do 
+      write_to "layout.sass", @files.layout_sass  #create sass files
+      write_to "utils.sass", @files.utils_sass
     end
+    in_project!("config/initializers") { write_to "sass.rb", @files.sass_rb }
+    #why do I need to do this?  should this not be setup with the install of haml?  this step is not memtioned in haml docs but without it css is not made from sass.
+    git_add_and_commit "Added Haml and SASS"
   end
 
   def install_jrails
     message "Installing jrails with Jquery-ui"
-    download_and_unpack_jquery_ui "http://jqueryui.com/download/jquery-ui-1.7.2.custom.zip"
+    version = "1.7.2"
+    download_and_unpack_jquery_ui "http://jqueryui.com/download/jquery-ui-#{version}.custom.zip"
 
-    in_project!
-    message "installing jrails" ,2
-    system "ruby script/plugin install http://ennerchi.googlecode.com/svn/trunk/plugins/jrails -q"
-
-    message "adding css and javascripts", 2
-    system "cp ./temp/jquery/css/smoothness ./public/stylesheets/ -r"
-    system "cp ./temp/jquery/js/jquery-ui*.js ./public/javascripts/jquery-ui.js"
-    FileUtils.remove_dir "#{@project_dir}/temp"
-
-    in_project! "app/views/layouts"
-    insert_line_after_in "main.haml", "  %head\n", "    = stylesheet_link_tag 'smoothness/jquery-ui-1.7.2.custom.css', :rel => \"Stylesheet\"\n"
+    in_project! do 
+      message "installing jrails" ,2
+      system "ruby script/plugin install http://ennerchi.googlecode.com/svn/trunk/plugins/jrails -q"
+      message "adding css and javascripts", 2
+      system "cp ./temp/jquery/css/smoothness ./public/stylesheets/ -r"             #copy css from downloaded jqueryui to stylesheets
+      system "cp ./temp/jquery/js/jquery-ui*.js ./public/javascripts/jquery-ui.js"  #copy javascripts from jquery
+      FileUtils.remove_dir "#{@project_dir}/temp"                                   #clean up
+    end
+    style_sheet_line = "    = stylesheet_link_tag 'smoothness/jquery-ui-#{version}.custom.css', :rel => \"Stylesheet\"\n"
+    in_project!("app/views/layouts") { insert_line_after_in "main.haml", "  %head\n", style_sheet_line }    #add stylesheet_link_tag to layout
     git_add_and_commit "Added jrails with Jquery-ui"
   end
 
   def install_authlogic
     message "Installing Authlogic"
     install_gems(["authlogic"])
-    in_project!
-    message "scaffolding user_sessions", 2
-    system "ruby script/generate session user_session -q"
-    message "scaffolding users (login & password)", 2
-    system "ruby script/generate sexy_scaffold user login:string email:string crypted_password:string password_salt:string -q"
 
-    in_project! "db/migrate"
-    insert_line_after_in Dir.entries(Dir.getwd).select{|ent| ent.include?("create_users")}.first, "      t.string :password_salt\n", "      t.string :persistence_token\n"
-    
-    message "modifying user model", 2
-    in_project! "app/models"
-    insert_line_after_in "user.rb", :line0, "  acts_as_authentic\n"
+    message "scaffolding user_sessions and users", 2
+    in_project! do 
+      system "ruby script/generate session user_session -q" #generate authlogic user_session
+      system "ruby script/generate sexy_scaffold user login:string email:string crypted_password:string password_salt:string -q" # generate user 
+    end
 
-    message "modifying controllers", 2
-    in_project! "app/controllers"
-    write_to "users_controller.rb", @files.users_controller
-    write_to "user_sessions_controller.rb", @files.user_sessions_controller
-    insert_line_after_in "application_controller.rb", "  # filter_parameter_logging :password\n", @files.authlogic_patch_for_application_controller
-    insert_line_after_in "welcome_controller.rb", :line0,  "  skip_before_filter :require_login\n"
+    message "modifying migration and routes", 2
+    file = 
+    in_project!("db/migrate") do 
+      file = Dir.entries(Dir.getwd).select{|ent| ent.include?("create_users")}.first                        #get users migration
+      insert_line_after_in file, "      t.string :password_salt\n", "      t.string :persistence_token\n"   #add to migration after scaffold so as to exclude from views
+    end
+    in_project!("config") { insert_line_after_in "routes.rb", :line0, @files.authlogic_patch_for_routes }   #add authlogic routes
 
-    message "modifying views, users can register, login and edit", 2
-    in_project! "app/views/users"
-    alter_line_in "_form.haml", "f.label :crypted_password", "f.label :password"
-    alter_line_in "_form.haml", "f.text_field :crypted_password", "f.password_field :password"
-    alter_line_in "_form.haml", "f.label :password_salt", "f.label :password_confirmation"
-    alter_line_in "_form.haml", "f.text_field :password_salt", "f.password_field :password_confirmation"
+    message "modifying user user_model", 2
+    in_project!("app/models") { insert_line_after_in "user.rb", :line0, "  acts_as_authentic\n" }           #made user act as authentic
 
-    in_project! "app/views/layouts"
-    insert_line_after_in "main.haml", "        .links\n", @files.authlogic_patch_for_layouts_main
-    in_project! "app/views/welcome"
-    write_to "index.haml", @files.authlogic_welcome_index
+    message "modifying users, user_sessions, welcome and application controllers", 2
+    in_project! "app/controllers" do 
+      write_to "users_controller.rb", @files.users_controller                                               #create users controller
+      write_to "user_sessions_controller.rb", @files.user_sessions_controller                               #create user_sessions controller
+      insert_line_after_in "application_controller.rb", "  # filter_parameter_logging :password\n", @files.authlogic_patch_for_application_controller #add authlogic methods to application controller
+      insert_line_after_in "welcome_controller.rb", :line0,  "  skip_before_filter :require_login\n"        #skip the before filter on the welcome controller
+    end
 
-    in_project! "config"
-    message "modifying routes", 2
-    insert_line_after_in "routes.rb", :line0, @files.authlogic_patch_for_routes
-
-    in_project!
+    message "modifying layouts, users views and welcome page", 2
+    in_project!("app/views/layouts") { insert_line_after_in "main.haml", "        .links\n", @files.authlogic_patch_for_layouts_main } #add register/logout links to layout
+    in_project! "app/views/users" do 
+      alter_line_in "_form.haml", "f.label :crypted_password", "f.label :password"                          #scaffold results in passwords being unsecure
+      alter_line_in "_form.haml", "f.text_field :crypted_password", "f.password_field :password"            #authlogic provides the means to secure password entry
+      alter_line_in "_form.haml", "f.label :password_salt", "f.label :password_confirmation"                #replacing text_field with password_field
+      alter_line_in "_form.haml", "f.text_field :password_salt", "f.password_field :password_confirmation"  #instances of crypted_password and password salt changed
+    end
+    in_project!("app/views/welcome") { write_to "index.haml", @files.authlogic_welcome_index }              #replace the simple index with one that has login form
     migrate!
     git_add_and_commit "Added Authlogic with User model, setup controllers and views for basic user create and login"
-
   end
 
   def install_scaffolds
@@ -256,16 +175,81 @@ class RScript
     system "ruby script/plugin install git://github.com/Sujimichi/sexy_scaffold.git"
     git_add_and_commit "Added Scaffolds"
   end
+ 
+  def download_and_unpack_jquery_ui url
+    require 'open-uri'
+    require 'fileutils'
+    require 'zip/zip'
+    require 'zip/zipfilesystem'
+    
+    in_project! "temp"
+    message "Downloading Jquery", 2
+    File.open("jquery.zip", "wb"){|f| f.write( open(url).read ) } #open uri opens the uri and result is saved to disk (potential security issue as i think it will just read whatever)
 
-  def migrate!
-    message "migrating", 2
-    system "rake db:migrate"
+    message "Unpacking Jquery", 2
+    Zip::ZipFile.open("jquery.zip") do |zip_file|
+      zip_file.each do |f|
+        f_path=File.join("jquery", f.name) 
+        FileUtils.mkdir_p(File.dirname(f_path))                 #create the path for file (without which next line fails
+        zip_file.extract(f, f_path) unless File.exist?(f_path)  # extract the file
+      end
+    end
+  end
+
+  def make_model name, attributes
+    message "Making Models"
+    system "ruby script/generate sexy_scaffold #{name} #{attributes.map{|k,v| "#{k}:#{v}" }.join(" ")}"
+    migrate!
   end
 
   def replace_with_server
     message "Rails App: #{@project_name} setup complete, launching server"
     in_project!
-    Kernel.exec("ruby script/server")
+    Kernel.exec("ruby script/server") # Kernel.exec does same as system only current process is replaced with executed one
+  end
+
+  def in_project! sub_dir = nil, &block
+    dir = @project_dir
+    dir = "#{@project_dir}/#{sub_dir}" if sub_dir
+    FileUtils.mkpath dir #makes the path exist if it does not already
+    FileUtils.chdir dir
+    yield if block
+  end
+  alias in_project in_project!
+
+  def migrate!
+    in_project!
+    message "migrating", 2
+    system "rake db:migrate"
+  end
+
+  def alter_line_in file, target, change
+    f = File.open(file, 'r')
+    new = f.map{|l| l.include?(target) ? l.sub(target, change) : l}
+    f.close
+    write_to file, new
+  end
+
+  def insert_line_after_in file, target_line, m
+    f = File.open(file, 'r')
+    data = f.map
+    f.close
+    i = data.index(target_line) if target_line.is_a? String
+    i = target_line.to_s.sub("line", "").to_i if target_line.is_a? Symbol
+    s = data[0..(i)]
+    e = data[(i+1)..(data.size-1)]
+    write_to file, ([s,m,e].flatten)
+  end
+
+  def write_to file, data
+    begin
+      f = File.open(file, "w")
+    rescue
+      FileUtils.touch file
+      f = File.open(file, "w")
+    end
+    f.write(data)
+    f.close
   end
 
 end
@@ -864,9 +848,5 @@ class FileData
   end
 
 end
+RailCutter.new_project "Test"
 
-r = RScript.new
-r.make_all
-
-#TODO
-#remove unneeded specs.
