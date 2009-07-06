@@ -25,7 +25,7 @@ class RailCutter
     #Basic Rails App
     make_rails_app
     set_up_git_repo
-    install_gems(["haml", "json", "fastercsv"])
+    install_gems(["haml", "json", "fastercsv"]) #authlogic gem added during the authlogic step
     install_haml
   end
 
@@ -34,7 +34,7 @@ class RailCutter
     setup_welcome_controller
     setup_layout
     install_jrails
-    install_scaffolds
+    install_scaffolds( {:sexy_scaffold => "git://github.com/Sujimichi/sexy_scaffold.git"})
     install_authlogic
     make_model "llama", {:name => :string, :spitting_distance => :float, :leathal => :boolean, :description => :text}
   
@@ -115,7 +115,7 @@ class RailCutter
 
     in_project! do 
       message "installing jrails" ,2
-      system "ruby script/plugin install http://ennerchi.googlecode.com/svn/trunk/plugins/jrails -q"
+      plugin "http://ennerchi.googlecode.com/svn/trunk/plugins/jrails"
       message "adding css and javascripts", 2
       system "cp ./temp/jquery/css/smoothness ./public/stylesheets/ -r"             #copy css from downloaded jqueryui to stylesheets
       system "cp ./temp/jquery/js/jquery-ui*.js ./public/javascripts/jquery-ui.js"  #copy javascripts from jquery
@@ -168,12 +168,18 @@ class RailCutter
     git_add_and_commit "Added Authlogic with User model, setup controllers and views for basic user create and login"
   end
 
-  def install_scaffolds
+  def install_scaffolds scaffolds
     message "Installing scaffolds"
-    in_project!
-    #system "ruby script/plugin install git://github.com/wolas/sexy_scaffold.git"
-    system "ruby script/plugin install git://github.com/Sujimichi/sexy_scaffold.git"
+    in_project! { scaffolds.each{|name, scaffold| plugin scaffold} }
     git_add_and_commit "Added Scaffolds"
+  end
+
+  def plugin plugin
+    plugin = plugin.frist.last if plugin.is_a? Hash
+    name = plugin.frist.first if plugin.is_a? Hash
+    name ||= plugin
+    message "installing plugin: #{name}", 4
+    system "ruby script/plugin install #{plugin} -q"
   end
  
   def download_and_unpack_jquery_ui url
@@ -198,7 +204,7 @@ class RailCutter
 
   def make_model name, attributes
     message "Making Models"
-    system "ruby script/generate sexy_scaffold #{name} #{attributes.map{|k,v| "#{k}:#{v}" }.join(" ")}"
+    system "ruby script/generate sexy_scaffold #{name} #{attributes.map{|k,v| "#{k}:#{v}" }.join(" ")} -q"
     migrate!
   end
 
@@ -228,6 +234,7 @@ class RailCutter
     new = f.map{|l| l.include?(target) ? l.sub(target, change) : l}
     f.close
     write_to file, new
+    message "changed line in #{file}", 2
   end
 
   def insert_line_after_in file, target_line, m
@@ -239,6 +246,7 @@ class RailCutter
     s = data[0..(i)]
     e = data[(i+1)..(data.size-1)]
     write_to file, ([s,m,e].flatten)
+    message "added line to #{file}", 2
   end
 
   def write_to file, data
@@ -848,5 +856,5 @@ class FileData
   end
 
 end
-RailCutter.new_project "Test"
+RailCutter.new_project "test"
 
