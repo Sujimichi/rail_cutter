@@ -1,4 +1,4 @@
-===Rail Cutter
+=Rail Cutter
 First attempt at making script to create a rails app with serveral components already setup.
 
 == Usage 
@@ -9,7 +9,7 @@ First attempt at making script to create a rails app with serveral components al
   comment lines out in the add_customization method to change what components are intalled, command line options will be added at some time.
 
   
-= Which will:
+=== Which will:
   - create rails app called Automation
   - create git repo
   - install gems (json, fastercsv.... just add more)
