@@ -1,3 +1,5 @@
+#!/usr/bin/env ruby
+
 class RailCutter
   require 'rubygems'
   require 'fileutils'
@@ -854,5 +856,7 @@ class FileData
   end
 
 end
-RailCutter.new_project "test"
+
+project_name = ARGV[0] || "test"
+RailCutter.new_project project_name
 
