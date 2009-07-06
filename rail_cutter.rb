@@ -251,13 +251,11 @@ class RailCutter
 
   def write_to file, data
     begin
-      f = File.open(file, "w")
+      File.open(file, "w") {|f| f.write(data) }
     rescue
       FileUtils.touch file
-      f = File.open(file, "w")
+      write_to file, data
     end
-    f.write(data)
-    f.close
   end
 
 end
