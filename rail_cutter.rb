@@ -112,7 +112,7 @@ class RailCutter
 
   def install_jrails
     message "Installing jrails with Jquery-ui"
-    version = "1.7.2"
+    version = "1.7.2"  #at some point I want this to be worked out on the fly
     download_and_unpack_jquery_ui "http://jqueryui.com/download/jquery-ui-#{version}.custom.zip"
 
     in_project! do 
