@@ -38,8 +38,7 @@ class RailCutter
     install_jrails
     install_scaffolds( {:sexy_scaffold => "git://github.com/Sujimichi/sexy_scaffold.git"})
     install_authlogic
-    make_model "llama", {:name => :string, :spitting_distance => :float, :leathal => :boolean, :description => :text}
-  
+#    make_model "llama", {:name => :string, :spitting_distance => :float, :leathal => :boolean, :description => :text}
   end
 
   def make_rails_app

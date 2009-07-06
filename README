@@ -25,7 +25,3 @@ First attempt at making script to create a rails app with serveral components al
     - adds authlogic methods to application_controller such as current_user and before_filter require_login
     - adds authlogic routes (login, register)
 
-  = and then just because it will scaffold a llama, just for you. - things are still in the dev phase ok.
-
-
-
