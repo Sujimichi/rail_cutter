@@ -1,0 +1,9 @@
+log/*.log
+*~
+*.swp
+*.swo
+tmp/log
+tmp/*.sp*
+Thumbs.db
+*.tmproj
+*.sqlite3
