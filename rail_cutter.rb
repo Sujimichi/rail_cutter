@@ -3,6 +3,10 @@
 class RailCutter
   require 'rubygems'
   require 'fileutils'
+  require 'open-uri'
+  require 'zip/zip'
+  require 'zip/zipfilesystem'
+
   attr_accessor :project_name
 
   def self.new_project name = "test"
@@ -63,21 +67,12 @@ class RailCutter
     system "git commit -m '#{message}' -q"
   end
 
-  def message text, indent = 0
-    puts "\n#{Array.new(text.length+10){"#"}.to_s}" if indent.eql?(0)
-    indt = Array.new(indent){"."}.to_s
-    puts "#{indt}#{text}\n"
-  end
-
   def setup_welcome_controller
     message "Adding Welcome Controller and Views"
     in_project!("config") { alter_line_in "routes.rb", "# map.root :controller", "map.root :controller" } # uncomment line in routes
     in_project!("app/controllers") { write_to "welcome_controller.rb", @files.welcome_controller }        # create welcome controller
     in_project!("app/views/welcome") { write_to "index.haml", @files.welcome_index }                      # create welcome index
-    in_project! "public" do 
-      FileUtils.touch "index.html"  #touched incase its not there
-      FileUtils.remove "index.html" #deleted
-    end
+    in_project!("public") { remove_file "index.html" }                                                    # remove public/index.html
     git_add_and_commit "added welcome controller, welcome view and changed routes, removed public/index.htm/"
   end
 
@@ -184,15 +179,9 @@ class RailCutter
   end
  
   def download_and_unpack_jquery_ui url
-    require 'open-uri'
-    require 'fileutils'
-    require 'zip/zip'
-    require 'zip/zipfilesystem'
-    
     in_project! "temp"
     message "Downloading Jquery", 2
     File.open("jquery.zip", "wb"){|f| f.write( open(url).read ) } #open uri opens the uri and result is saved to disk (potential security issue as i think it will just read whatever)
-
     message "Unpacking Jquery", 2
     Zip::ZipFile.open("jquery.zip") do |zip_file|
       zip_file.each do |f|
@@ -203,18 +192,6 @@ class RailCutter
     end
   end
 
-  def make_model name, attributes
-    message "Making Models"
-    system "ruby script/generate sexy_scaffold #{name} #{attributes.map{|k,v| "#{k}:#{v}" }.join(" ")} -q"
-    migrate!
-  end
-
-  def replace_with_server
-    message "Rails App: #{@project_name} setup complete, launching server"
-    in_project!
-    Kernel.exec("ruby script/server") # Kernel.exec does same as system only current process is replaced with executed one
-  end
-
   def in_project! sub_dir = nil, &block
     dir = @project_dir
     dir = "#{@project_dir}/#{sub_dir}" if sub_dir
@@ -223,6 +200,12 @@ class RailCutter
     yield if block
   end
   alias in_project in_project!
+
+  def make_model name, attributes
+    message "Making Models"
+    system "ruby script/generate sexy_scaffold #{name} #{attributes.map{|k,v| "#{k}:#{v}" }.join(" ")} -q"
+    migrate!
+  end
 
   def migrate!
     in_project!
@@ -254,15 +237,34 @@ class RailCutter
     begin
       File.open(file, "w") {|f| f.write(data) }
     rescue
-      FileUtils.touch file
-      write_to file, data
+      FileUtils.touch file  #fails if file not there, so make
+      write_to file, data   #and call again, (and get stuck 4ever if another problem!)
     end
+  end
+
+  def remove_file file
+    FileUtils.touch file          #touched incase its not there
+    FileUtils.remove "index.html" #deleted
+  end
+
+  def message text, indent = 0
+    puts "\n#{Array.new(text.length+10){"#"}.to_s}" if indent.eql?(0)
+    indt = Array.new(indent){"."}.to_s
+    puts "#{indt}#{text}\n"
+  end
+
+  def replace_with_server
+    message "Rails App: #{@project_name} setup complete, launching server"
+    in_project!
+    Kernel.exec("ruby script/server") # Kernel.exec does same as system only current process is replaced with executed one
   end
 
 end
 
 
 #FILE DATA
+#This is a class which has methods that return files or stubs as Array of Strings
+#Dont like it that much, will change this so that the main rail_cutter can call this class but it will prob source the data from external files
 class FileData
   def initialize name
     @project_name = name
@@ -275,7 +277,6 @@ class FileData
     f.close
     puts data.map {|j|  "#{j.inspect},"}
   end
-
 
   def authlogic_welcome_index
     [
@@ -446,7 +447,6 @@ class FileData
     ]
 
   end
-
 
   def welcome_controller
     [
