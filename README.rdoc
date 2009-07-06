@@ -1,6 +1,7 @@
+===Rail Cutter
 First attempt at making script to create a rails app with serveral components already setup.
 
-= Usage 
+== Usage 
 
   In location where project is to be created:
   'ruby <path_to_rail_cutter>/rail_cutter.rb <project_name>'
@@ -9,17 +10,17 @@ First attempt at making script to create a rails app with serveral components al
 
   
 = Which will:
-  = create rails app called Automation
-  = create git repo
-  = install gems (json, fastercsv.... just add more)
-  = install haml with sass
-  = setup a welcome contoller and index (and remove public/index.html)
-  = add a basic layout file (main.haml) to app/views/layouts and update application_controller
-  = install jrails
+  - create rails app called Automation
+  - create git repo
+  - install gems (json, fastercsv.... just add more)
+  - install haml with sass
+  - setup a welcome contoller and index (and remove public/index.html)
+  - add a basic layout file (main.haml) to app/views/layouts and update application_controller
+  - install jrails
     - download Jquery-UI and sets up js and css files - gets v 1.7.2, want to automate version selection at some point.
     - adds stylesheet_link_tags to layout file
-  = install scaffolds - uses my fork of wolas sexy_scaffold which has some additions to be more authlogic friendlys
-  = install authlogic
+  - install scaffolds - uses my fork of wolas sexy_scaffold which has some additions to be more authlogic friendlys
+  - install authlogic
     - create user_sessions model and controller
     - create users model, controller and views with act_as_authentic on the model
     - adds authlogic methods to application_controller such as current_user and before_filter require_login
